@@ -1,0 +1,197 @@
+#!/usr/bin/perl
+
+# =========================================================================== #
+#                                                                             #
+# Author(s): Ivan Ivanov                                                      #
+# Title: um-zproc                                                             #
+# Subtitle: (none)                                                            #
+# Release date: 2016-09-23                                                    #
+#                                                                             #
+
+#
+#    Copyright (C) 2016 Ivan Ivanov.
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+#                                                                             #
+# =========================================================================== #
+
+    #
+    # Modules .................................................................
+    #
+
+use strict;
+use warnings;
+
+use DBI;
+use Getopt::Long;
+use Try::Tiny;
+
+# =========================================================================== #
+
+    #
+    # Configuration ...........................................................
+    #
+
+my $help = qq {
+Usage: um-zproc [ OPTIONS ] -h | --hostid
+Create a custom Zabbix template for monitoring certain process.
+Options:
+    -i, --itemname      human readable name of the process
+    -n, --procname      process name from /proc/*/status
+    -u, --procuser      user running the process
+    -c, --procchild     child process command line
+    -p, --procparent    parent process command line
+    -h, --hostid        host ID of the template from Zabbix database
+};
+
+my $dbh;
+my $db_pid = "/var/run/postgresql/";
+my $db_port = 5432;
+my $db_username = "zabbix";
+my $db_name = "zabbix";
+my $db_password;
+
+my $custom_item_name = "Sample";
+my $custom_key_process_name = "name";
+my $custom_key_process_user = "user";
+my $custom_key_process_childcmdline = "childcmdline";
+my $custom_key_process_parentcmdline = "parentcmdline";
+my $custom_host_id;
+
+my %queries = (
+    item_name => qq {
+        UPDATE items
+        SET name = replace(name, 'Sample', ?)
+        WHERE hostid = ?;
+    },
+    key_process_name => qq {
+        UPDATE items
+        SET key_ = replace(key_, 'name', ?)
+        WHERE hostid = ?;
+    },
+    key_process_user => qq {
+        UPDATE items
+        SET key_ = replace(key_, 'user', ?)
+        WHERE hostid = ?;
+    },
+    key_process_childcmdline => qq {
+        UPDATE items
+        SET key_ = replace(key_, 'childcmdline', ?)
+        WHERE hostid = ?;
+    },
+    key_process_parentcmdline => qq {
+        UPDATE items
+        SET key_ = replace(key_, 'parentcmdline', ?)
+        WHERE hostid = ?;
+    }
+);
+
+GetOptions(
+    "itemname|i=s" => \$custom_item_name,
+    "procname|n=s" => \$custom_key_process_name,
+    "procuser|u=s" => \$custom_key_process_user,
+    "procchild|c=s" => \$custom_key_process_childcmdline,
+    "procparent|p=s" => \$custom_key_process_parentcmdline,
+    "hostid|h=s" => \$custom_host_id
+);
+
+defined($custom_host_id) or die "um-zproc: host ID is not defined$help";
+
+# =========================================================================== #
+
+    #
+    # Main ....................................................................
+    #
+
+try
+{
+
+    $dbh = DBI->connect(
+        "DBI:Pg:dbname=$db_name;host=$db_pid;port=$db_port",
+        $db_username,
+        $db_password,
+        {
+            AutoCommit => 0,
+            PrintError => 0,
+            RaiseError => 1
+        }
+    );
+
+    my $item_name_result = $dbh->prepare(
+    $queries{item_name}
+    );
+    $item_name_result->execute(
+    $custom_item_name, $custom_host_id
+    )
+    or die $DBI::errstr;
+    $item_name_result->finish();
+
+    my $key_process_name_result = $dbh->prepare(
+    $queries{key_process_name}
+    );
+    $key_process_name_result->execute(
+    $custom_key_process_name, $custom_host_id
+    )
+    or die $DBI::errstr;
+    $key_process_name_result->finish();
+
+    my $key_process_user_result = $dbh->prepare(
+    $queries{key_process_user}
+    );
+    $key_process_user_result->execute(
+    $custom_key_process_user, $custom_host_id
+    )
+    or die $DBI::errstr;
+    $key_process_user_result->finish();
+
+    my $key_process_childcmdline_result = $dbh->prepare(
+    $queries{key_process_childcmdline}
+    );
+    $key_process_childcmdline_result->execute(
+    $custom_key_process_childcmdline, $custom_host_id
+    )
+    or die $DBI::errstr;
+    $key_process_childcmdline_result->finish();
+
+    my $key_process_parentcmdline_result = $dbh->prepare(
+    $queries{key_process_parentcmdline}
+    );
+    $key_process_parentcmdline_result->execute(
+    $custom_key_process_parentcmdline, $custom_host_id
+    )
+    or die $DBI::errstr;
+    $key_process_parentcmdline_result->finish();
+
+    $dbh->commit or die $DBI::errstr;
+
+    $dbh->disconnect();
+
+}
+
+catch
+{
+
+    print STDERR $_;
+
+    if(defined($dbh))
+    {
+        $dbh->disconnect();
+    }
+
+}
+
+# =========================================================================== #
+

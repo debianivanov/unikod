@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# =========================================================================== #
+#                                                                             #
+# Author(s): Ivan Ivanov                                                      #
+# Title: um-ovpn                                                              #
+# Subtitle: (none)                                                            #
+# Release date: 2016-09-24                                                    #
+#                                                                             #
+
+#
+#    Copyright (C) 2016 Ivan Ivanov.
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+
+#                                                                             #
+# =========================================================================== #
+
+    #
+    # Configuration ...........................................................
+    #
+
+    OVPN_CONF_PATH="/etc/unimon"
+    OVPN_LOG_PATH="/var/log/unimon"
+    OVPN_USER="nobody"
+    OVPN_GROUP="users"
+
+    if [ -r /etc/default/um-ovpn ] ; then
+        . /etc/default/um-ovpn
+    fi
+
+    if [ ! -r ${OVPN_CONF_PATH}/um-ovpn.conf ] ; then
+        echo -n "um-ovpn: cannot access ${OVPN_CONF_PATH}/um-ovpn.conf: "
+        echo "No such file or directory / Permission denied"
+        exit 2
+    fi
+
+    # if [ ! -d ${OVPN_LOG_PATH} ] ; then
+    #     /bin/mkdir -p ${OVPN_LOG_PATH}
+    #     /bin/chown ${OVPN_USER}:${OVPN_GROUP} ${OVPN_LOG_PATH}
+    # fi
+
+# =========================================================================== #
+
+    #
+    # Main ....................................................................
+    #
+
+    while read -u10 OVPN_LINE ; do
+        OVPN_CLIENT_CNAME=`echo ${OVPN_LINE} | /usr/bin/cut -d ',' -f 1`
+        OVPN_CLIENT_PUBIP=`echo ${OVPN_LINE} | /usr/bin/cut -d ',' -f 2`
+        if [ "${OVPN_CLIENT_CNAME}" == "${common_name}" ] && \
+           [ "${OVPN_CLIENT_PUBIP}" == "0.0.0.0" ] ; then
+            echo -n "`/bin/date '+%b %d %T'` `/bin/hostname` um-ovpn: "
+            echo -n "common name and IP address 0.0.0.0 match: "
+            echo "${common_name} [ ip4 ${trusted_ip} ] connected."
+            exit 0
+        fi
+        if [ "${OVPN_CLIENT_CNAME}" == "${common_name}" ] && \
+           [ "${OVPN_CLIENT_PUBIP}" == "${trusted_ip}" ] ; then
+            echo -n "`/bin/date '+%b %d %T'` `/bin/hostname` um-ovpn: "
+            echo -n "common name and IP address match: "
+            echo "${common_name} [ ip4 ${trusted_ip} ] connected."
+            exit 0
+        fi
+    done 10< ${OVPN_CONF_PATH}/um-ovpn.conf \
+            >> ${OVPN_LOG_PATH}/um-ovpn.log 2>&1
+
+            echo -n "`/bin/date '+%b %d %T'` `/bin/hostname` um-ovpn: " \
+            >> ${OVPN_LOG_PATH}/um-ovpn.log 2>&1
+            echo -n "common name and IP address do not match: " \
+            >> ${OVPN_LOG_PATH}/um-ovpn.log 2>&1
+            echo "${common_name} [ ip4 ${trusted_ip} ] disconnected." \
+            >> ${OVPN_LOG_PATH}/um-ovpn.log 2>&1
+            exit 1
+
+# =========================================================================== #
+
